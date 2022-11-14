@@ -407,7 +407,7 @@
                 </div>
             </div>
             @endif
-            @if($order->orderstatus_id == 3 || $order->orderstatus_id == 4 ||$order->orderstatus_id == 5 ||
+           <!--  @if($order->orderstatus_id == 3 || $order->orderstatus_id == 4 ||$order->orderstatus_id == 5 ||
             $order->orderstatus_id == 6)
             @if($order->accept_delivery && $order->accept_delivery->user && $order->accept_delivery->user->name)
             <div class="card">
@@ -417,7 +417,7 @@
                 </div>
             </div>
             @endif
-            @endif
+            @endif -->
             @if($order->rating)
             <div class="card">
                 <div class="card-body">
@@ -478,6 +478,86 @@
                     </div>
                 </div>
             </div>
+            @endif
+            @if($order->delivery_type==1)
+            @if($order->orderstatus_id == 2)
+            <div class="card">
+                <div class="card-body">
+                    <label class="control-label no-margin text-semibold mr-1"><strong>Assign Delivery
+                            Guy</strong></label>
+                    <form action="{{route('restaurant.assignDeliveryFromStore')}}" method="POST">
+                        <input type="text" hidden value="{{$order->id}}" name="order_id">
+                        <input type="text" hidden value="{{$order->user->id}}" name="customer_id">
+                        @csrf
+                        <div class="form-group row mb-0">
+                            <div class="col-lg-12 mb-2">
+                                <select class="form-control select"  name="user_id" required="required">
+                                    <option> Assign Delivery </option>
+                                    @foreach ($users as $user)
+                                    <option value="{{$user->id}}" @if(!$user->delivery_guy_detail) disabled="disabled"
+                                        @endif>{{$user->name}} @if($user->delivery_guy_detail &&
+                                        $user->delivery_guy_detail->status == 0) (Offline) @endif</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <br>
+                            <div class="col-lg-12 mt-1 text-right float-right p-0">
+                                <button type="submit" class="btn btn-secondary mr-1">
+                                    Assign Delivery
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            @endif
+            @endif
+            @if($order->delivery_type==1)
+            @if($order->orderstatus_id == 3 || $order->orderstatus_id == 4)
+            <div class="card">
+                <div class="card-body">
+                    @if($order->accept_delivery && $order->accept_delivery->user && $order->accept_delivery->user->name)
+                    <p class="text-center mb-2"> <strong>Assigned Delivery Guy:
+                            {{ $order->accept_delivery->user->name }}
+                            @if($order->accept_delivery->user->delivery_guy_detail->status == 0) <span
+                                class="text-danger"> (Offline) </span> @endif</strong></p>
+                    @endif
+                    <form action="{{route('restaurant.reAssignDeliveryFromStore')}}" method="POST">
+                        <input type="text" hidden value="{{$order->id}}" name="order_id">
+                        <input type="text" hidden value="{{$order->user->id}}" name="customer_id">
+                        @csrf
+                        <div class="form-group row">
+                            <div class="col-lg-12">
+                                <select class="form-control select"  name="user_id" required="required">
+                                    <option> Re-Assign Delivery </option>
+                                    @foreach ($users as $user)
+                                    <option value="{{$user->id}}">{{$user->name}} @if($user->delivery_guy_detail &&
+                                        $user->delivery_guy_detail->status == 0) (Offline) @endif</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-lg-12 mt-2 text-center">
+                                <button type="submit" class="btn btn-secondary">
+                                    Re-Assign Delivery
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            @endif
+            @endif
+            @if($order->orderstatus_id == 5 || $order->orderstatus_id == 6)
+            @if($order->accept_delivery && $order->accept_delivery->user && $order->accept_delivery->user->name)
+            <div class="card">
+                <div class="card-body">
+                    <p class="text-center mb-0"> <strong>Assigned Delivery Guy:
+                            {{ $order->accept_delivery->user->name }}
+                            @if($order->accept_delivery->user->delivery_guy_detail->status == 0) (Offline) @endif
+                        </strong></p>
+                </div>
+            </div>
+            @endif
             @endif
         </div>
     </div>
