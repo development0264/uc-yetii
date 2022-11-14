@@ -16,7 +16,7 @@ Dashboard
 
     <div class="d-flex justify-content-between mt-4 mb-0">
         <div>
-            <h3><b>Dashboard cvc</b></h3>
+            <h3><b>Dashboard</b></h3>
         </div>
         <div>
             <button type="button" class="btn btn-action-secondary daterange-ranges">
