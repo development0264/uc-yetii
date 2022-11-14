@@ -14,7 +14,8 @@ Route::group(['prefix' => 'store-owner', 'middleware' => ['auth', 'storeowner']]
     Route::get('/orders/mark-selfpickup-order-completed/{id}', 'RestaurantOwnerController@markSelfPickupOrderAsCompleted')->name('restaurant.markSelfPickupOrderAsCompleted');
 
     Route::get('/orders/cancel-order/{id}', 'RestaurantOwnerController@cancelOrder')->name('restaurant.cancelOrder');
-
+    Route::post('/order/assign-delivery', 'RestaurantOwnerController@assignDeliveryFromStore')->name('restaurant.assignDeliveryFromStore');
+    Route::post('/order/reassign-delivery', 'RestaurantOwnerController@reAssignDeliveryFromStore')->name('restaurant.reAssignDeliveryFromStore');
     Route::get('/stores', 'RestaurantOwnerController@restaurants')->name('restaurant.restaurants');
     Route::get('/store/edit/{id}', 'RestaurantOwnerController@getEditRestaurant')->name('restaurant.get.editRestaurant');
     Route::post('/store/new/save', 'RestaurantOwnerController@saveNewRestaurant')->name('restaurant.saveNewRestaurant');

@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\DB;
 use Nwidart\Modules\Facades\Module;
 use Modules\ThermalPrinter\Entities\PrinterSetting;
 use Modules\ThermalPrinter\Entities\ThermalPrinter;
-
+use App\SocketPush;
 class RestaurantOwnerController extends Controller
 {
     public function dashboard()
@@ -1220,6 +1220,12 @@ class RestaurantOwnerController extends Controller
     {
         $user = Auth::user();
         $restaurantIds = $user->restaurants->pluck('id')->toArray();
+        $zone_id = session('selectedZone');
+        if ($zone_id) {
+            $users = User::role('Delivery Guy')->with('delivery_guy_detail')->where('zone_id', $zone_id)->get();
+        } else {
+            $users = User::role('Delivery Guy')->with('delivery_guy_detail')->get();
+        }
 
         $order = Order::whereIn('restaurant_id', $restaurantIds)
             ->where('unique_order_id', $order_id)
@@ -1231,6 +1237,7 @@ class RestaurantOwnerController extends Controller
         if ($order && !in_array($order->orderstatus_id, $notConfirmedOrderStatusIds)) {
             return view('restaurantowner.viewOrder', array(
                 'order' => $order,
+                'users' => $users,
             ));
         } else {
             return redirect()->route('restaurant.orders')->with(array('message' => 'Access Denied'));
@@ -1731,5 +1738,137 @@ class RestaurantOwnerController extends Controller
                 return redirect()->back()->with(array('message' => __('storeDashboard.orderSomethingWentWrongNotification')));
             }
         }
+    }
+
+    public function assignDeliveryFromStore(Request $request)
+    {
+        // dd($request->all());
+        $user = Auth::user();
+
+        $deliveryUser = User::where('id', $request->user_id)->first();
+        if (!$deliveryUser) {
+            abort(404, 'Delivery Guy not found');
+        }
+
+        DB::beginTransaction();
+        try {
+            $order = Order::where('id', $request->order_id)
+                ->with('restaurant')
+                ->lockForUpdate()
+                ->first();
+
+            $assignment = new AcceptDelivery;
+            $assignment->order_id = $order->id;
+            $assignment->user_id = $deliveryUser->id;
+            $assignment->customer_id = $request->customer_id;
+            $assignment->is_complete = 0;
+            $assignment->created_at = Carbon::now();
+            $assignment->updated_at = Carbon::now();
+            $assignment->save();
+
+            $order->orderstatus_id = 3;
+            $order->save();
+
+            activity()
+                ->performedOn($order)
+                ->causedBy($user)
+                ->withProperties(['type' => 'Order_Assigned'])->log('Order assigned to Delivery Guy');
+
+            DB::commit();
+
+            if (config('setting.enablePushNotificationOrders') == 'true') {
+                $notify = new PushNotify();
+                $notify->sendPushNotification('3', $order->user_id, $order->unique_order_id);
+            }
+
+            // Send SMS Notification to Delivery Guy
+            if (config('setting.smsDeliveryNotify') == 'true') {
+                $message = config('setting.defaultSmsDeliveryMsg');
+                $otp = null;
+                $smsnotify = new Sms();
+                $smsnotify->processSmsAction('OD_NOTIFY', $deliveryUser->phone, $otp, $message);
+            }
+
+            // Send Push Notification to Delivery Guy
+            if (config('setting.enablePushNotificationOrders') == 'true') {
+                if (config('setting.hasSocketPush') != 'true') {
+                    $notify = new PushNotify();
+                    $notify->sendPushNotification('TO_DELIVERY', $deliveryUser->id, $order->unique_order_id);
+                } else {
+                    if (config('setting.iHaveFoodomaaDeliveryApp') == "true") {
+                    stopPlayingNotificationSoundDeliveryAppHelper($order);
+                    $deliveryGuyIds = [$deliveryUser->id];
+                    $notify = new SocketPush();
+                    $notify->pushNewOrder($order->unique_order_id, $deliveryGuyIds);
+                    }
+                }
+            }
+
+            return redirect()->back()->with(array('success' => 'Order Assigned'));
+        } catch (\Illuminate\Database\QueryException $e) {
+            DB::rollback();
+            $errorCode = $e->errorInfo[1];
+            if ($errorCode == 1062) {
+                return redirect()->back()->with(array('message' => 'Delivery already accepted'));
+            }
+        }
+    }
+
+    /**
+     * @param Request $request
+     */
+    public function reAssignDeliveryFromStore(Request $request)
+    {
+        $user = Auth::user();
+
+        $deliveryUser = User::where('id', $request->user_id)->first();
+        if (!$deliveryUser) {
+            abort(404, 'Delivery Guy not found');
+        }
+
+        $order = Order::where('id', $request->order_id)->firstOrFail();
+
+        switch ($order->orderstatus_id) {
+            case '5':
+                return redirect()->back()->with(array('message' => 'Cannot assign delivery guy to a completed order.'));
+            case '6':
+                return redirect()->back()->with(array('message' => 'Cannot assign delivery guy to a cancelled order.'));
+        }
+
+        $assignment = AcceptDelivery::where('order_id', $request->order_id)->first();
+        $assignment->user_id = $deliveryUser->id;
+        $assignment->is_complete = 0;
+        $assignment->updated_at = Carbon::now();
+        $assignment->save();
+
+        // Send SMS Notification to Delivery Guy
+        if (config('setting.smsDeliveryNotify') == 'true') {
+            $message = config('setting.defaultSmsDeliveryMsg');
+            $otp = null;
+            $smsnotify = new Sms();
+            $smsnotify->processSmsAction('OD_NOTIFY', $deliveryUser->phone, $otp, $message);
+        }
+
+        // Send Push Notification to Delivery Guy
+        if (config('setting.enablePushNotificationOrders') == 'true') {
+            if (config('setting.hasSocketPush') != 'true') {
+                $notify = new PushNotify();
+                $notify->sendPushNotification('TO_DELIVERY', $deliveryUser->id, $order->unique_order_id);
+            } else {
+                if (config('setting.iHaveFoodomaaDeliveryApp') == "true") {
+                    stopPlayingNotificationSoundDeliveryAppHelper($order);
+                    $deliveryGuyIds = [$deliveryUser->id];
+                    $notify = new SocketPush();
+                    $notify->pushNewOrder($order->unique_order_id, $deliveryGuyIds);
+                }
+            }
+        }
+
+        activity()
+            ->performedOn($order)
+            ->causedBy($user)
+            ->withProperties(['type' => 'Order_Reassigned'])->log('Order re-assigned to Delivery Guy');
+
+        return redirect()->back()->with(array('success' => 'Order reassigned successfully'));
     }
 };
